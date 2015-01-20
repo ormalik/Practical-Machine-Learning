@@ -1,0 +1,92 @@
+---
+title: "Practical Machine Learning"
+---
+
+**Step 1: Import data into R**
+
+training  <- read.csv("pml-training.csv", na.strings=c("NA",""), header=TRUE)
+testing  <- read.csv("pml-testing.csv", na.strings=c("NA",""), header=TRUE)
+columns_train <- colnames(training)
+columns_test  <- colnames(testing)
+
+**Step 2: Count data that are not NA in all columns**
+
+notmissing  <- function(x){
+        as.vector(apply(x, 2, function(x)
+length(which(!is.na(x)))))                
+}
+
+**Step 3: Identify missing data to drop from analysis**
+
+colcounts  <- notmissing(training)
+drop  <- c()
+for(count in 1:length(colcounts)){
+   if (colcounts[count] <nrow(training)){
+      drop <-c(drop,columns_train[count])            
+   }
+           
+}
+
+**Step 4: Drop unnecessary columns and NA values**
+
+training  <- training[, !(names(training) %in% drop)]
+training  <- training[,8:length(colnames(training))]
+
+testing  <- testing[, !(names(testing) %in% drop)]
+testing  <- testing[, 8:length(colnames(testing))]
+
+**Step 5: Show remaining columns**
+
+colnames(training)
+colnames(testing)
+
+**Step 6: Identify variables with near zero variance**
+
+library(caret)
+nearzero  <- nearZeroVar(training, saveMetrics=TRUE)
+nearzero
+
+None of the variables displayed zero variance. Therefore they are all included in the analysis.
+
+**Step 7: Identify and drop highly correlated predictors**
+
+ncol(training)
+train_matrix <- data.matrix(training)
+corr_matrix <- cor(train_matrix)
+highcorr <- findCorrelation(corr_matrix, 0.90)
+train_matrix <-train_matrix[, -highcorr]
+train_set <- as.data.frame(train_matrix)
+train_set$classe <- as.factor(train_set$classe)
+
+**Step 8: Divide the dataset into training and testing sets**
+
+Since the test dataset has very few observations, I split the training set 60/40 into training and testing samples
+
+inTrain <- createDataPartition(y=train_set$classe, p=0.60, list=FALSE)
+training_samples <- train_set[inTrain,]
+testing_samples <- train_set[-inTrain,]
+
+**Step 9: Select and fit a prediction model**
+
+Because this is a classification problem, fit a training model using the randomForest package
+
+library(randomForest)
+set.seed(5000)
+modelFit <- train(classe~., data=training_samples, method="rf")
+modelFit$finalModel
+
+The training set error rate is 0.8%, which is fairly low. 
+
+**Step 10: Test the final model on the testing dataset**
+
+pred <- predict(modelFit$finalModel, newdata=testing_samples)
+confusionMatrix(pred, testing_samples$classe)
+
+This model has 99% accuracy on the test sample, which was not used in training this model
+Now we can test this model on the test set provided, for validation purposes.
+
+predictions <- predict(modelFit$finalModel, newdata=testing)
+
+The OOB estimate of error rate is 0.79%
+
+The predictions vector provides the answers for the second set of questions associated with this assignment. 
